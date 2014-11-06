@@ -959,7 +959,7 @@ Each token information entry is of the form:
 KEYWORD is the token.
 FORWARD-MATCH-REGEXP is a regexp that matches all possible tokens when going forward.
 BACKWARDS-MATCH-REGEXP is a regexp that matches all possible tokens when going backwards.
-TOKEN-TYPE determines where the token occurs on a statement. open indicates that the token appears at start, close indicates that it appears at end, middle indicates that it is a middle type token, and middle-or-open indicates that it can appear both as a middle or an open type.")
+TOKEN-TYPE determines where the token occurs on a statement. open indicates that the token appears at start, close indicates that it appears at end, middle indicates that it is between a an 'open' and a 'close' token, and middle-or-open indicates that it can appear both as a middle or an open type.")
 
 (defconst lua-indentation-modifier-regexp
   ;; The absence of else is deliberate, since it does not modify the
