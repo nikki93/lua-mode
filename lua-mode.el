@@ -1205,71 +1205,34 @@ The criteria for a continuing statement are:
                     (lua-last-token-continues-p)))))))
 
 (defun lua-make-indentation-info-pair (found-token found-pos)
-  "This is a helper function to lua-calculate-indentation-info. Don't
+  "Calculate how much current line impacts following line indentation.
+
+This is a helper function to lua-calculate-indentation-info. Don't
 use standalone."
-  (cond
-   ;; Block openers.
-   ((member found-token (list "{" "(" "[" "function"))
-    (cons 'relative lua-indent-level))
+  (let* ((token-info (lua-get-block-token-info found-token))
+         (token-type (lua-get-token-type token-info)))
+    (cond
+     ((eq token-type 'open)
+      (cons 'relative lua-indent-level))
 
-   ;; These are not really block starters. They should not add to indentation.
-   ;; The corresponding "then" and "do" handle the indentation.
-   ((member found-token (list "if" "for" "while"))
-    (cons 'relative 0))
+     ((eq token-type 'middle-or-open)
+      (if (lua-find-matching-token-word found-token 'backward)
+          ;; This token is in the middle.
+          (cons 'relative 0)
+        (cons 'relative lua-indent-level)))
 
-   ;; Closing tokens follow: These are usually taken care of by
-   ;; lua-calculate-indentation-override.
-   ;; elseif is a bit of a hack. It is not handled separately, but it needs to
-   ;; nullify a previous then if on the same line.
-   ((member found-token (list "until" "elseif"))
-    (save-excursion
+     ((eq token-type 'middle)
+      ;; Check if opener is on the same line, in which case we do not change
+      ;; indentation.
       (let ((line (line-number-at-pos)))
-        (if (and (lua-goto-matching-block-token found-pos 'backward)
-                 (= line (line-number-at-pos)))
-            (cons 'remove-matching 0)
-          (cons 'relative 0)))))
+        (save-excursion
+          (when (lua-find-matching-token-word found-token 'backward)
+            (if (= line (line-number-at-pos))
+                (cons 'relative 0))
+            (cons 'relative lua-indent-level)))))
 
-   ;; 'else' is a special case; if its matching block token is on the same line,
-   ;; instead of removing the matching token, it has to replace it, so that
-   ;; either the next line will be indented correctly, or the end on the same
-   ;; line will remove the effect of the else.
-   ((string-equal found-token "else")
-    (save-excursion
-      (let ((line (line-number-at-pos)))
-        (if (and (lua-goto-matching-block-token found-pos 'backward)
-                 (= line (line-number-at-pos)))
-            (cons 'replace-matching (cons 'relative lua-indent-level))
-          (cons 'relative lua-indent-level)))))
-
-   ;; Block closers. If they are on the same line as their openers, they simply
-   ;; eat up the matching indentation modifier. Otherwise, they pull indentation
-   ;; back to the matching block opener. Special case if the token is at
-   ;; beginning of line: since `lua-calculate-indentation-override' unindented
-   ;; the line by one level already, then it only eats up the matching
-   ;; indentation midifier.
-   ((member found-token (list ")" "}" "]" "end"))
-    (save-excursion
-      (let ((line (line-number-at-pos))
-            (cur-point (point)))
-        (back-to-indentation)
-        (lua-find-regexp 'forward lua-indentation-modifier-regexp (line-end-position))
-        (back-to-indentation)
-        (let ((first-token-p (and (= (match-beginning 0) (point))
-                                  (= (lua-find-regexp 'forward lua-indentation-modifier-regexp (line-end-position)) cur-point))))
-          (lua-goto-matching-block-token found-pos 'backward)
-          (if (and (/= line (line-number-at-pos)) (not first-token-p))
-              (cons 'relative (- lua-indent-level))
-            (cons 'remove-matching 0))))))
-
-   ;; Everything else. This is from the original code: If opening a block
-   ;; (match-data 1 exists), then push indentation one level up, if it is
-   ;; closing a block, pull it one level down.
-   ('other-indentation-modifier
-    (cons 'relative (if (nth 2 (match-data))
-                        ;; beginning of a block matched
-                        lua-indent-level
-                      ;; end of a block matched
-                      (- lua-indent-level))))))
+     ((eq token-type 'close)
+      (cons 'relative (- lua-indent-level))))))
 
 (defun  lua-add-indentation-info-pair (pair info)
   "Add the given indentation info pair to the list of indentation information.
@@ -1313,8 +1276,6 @@ Return list of indentation modifiers from point to BOUND."
              (lua-make-indentation-info-pair found-token found-pos)
              indentation-info))))
   indentation-info)
-
-
 
 (defun lua-calculate-indentation-info (&optional parse-end)
   "For each block token on the line, computes how it affects the indentation.
