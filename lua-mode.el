@@ -957,8 +957,8 @@ ignored, nil otherwise."
 Each token information entry is of the form:
   KEYWORD FORWARD-MATCH-REGEXP BACKWARDS-MATCH-REGEXP TOKEN-TYPE
 KEYWORD is the token.
-FORWARD-MATCH-REGEXP is a regexp that matches all possble tokens when going forward.
-BACKWARDS-MATCH-REGEXP is a regexp that matches all possble tokens when going backwards.
+FORWARD-MATCH-REGEXP is a regexp that matches all possible tokens when going forward.
+BACKWARDS-MATCH-REGEXP is a regexp that matches all possible tokens when going backwards.
 TOKEN-TYPE determines where the token occurs on a statement. open indicates that the token appears at start, close indicates that it appears at end, middle indicates that it is a middle type token, and middle-or-open indicates that it can appear both as a middle or an open type.")
 
 (defconst lua-indentation-modifier-regexp
@@ -1372,74 +1372,6 @@ one."
           (? ":" (+ (any alnum "_")))
           symbol-end)
     "Lua function name regexp in `rx'-SEXP format."))
-
-
-(defconst lua--left-shifter-regexp
-  (eval-when-compile
-    (rx
-     ;; This regexp should answer the following questions:
-     ;; 1. is there a left shifter regexp on that line?
-     ;; 2. where does block-open token of that left shifter reside?
-     ;;
-     ;; NOTE: couldn't use `group-n' keyword of `rx' macro, because it was
-     ;; introduced in Emacs 24.2 only, so for the sake of code clarity the named
-     ;; groups don't really match anything, they just report the position of the
-     ;; match.
-     (or (seq (regexp "\\_<local[ \t]+") (regexp "\\(?1:\\)function\\_>"))
-         (seq (eval lua--function-name-rx) (* blank) (regexp "\\(?1:\\)[{(]"))
-         (seq (or
-               ;; assignment statement prefix
-               (seq (* nonl) (not (any "<=>~")) "=" (* blank))
-               ;; return statement prefix
-               (seq word-start "return" word-end (* blank)))
-              (regexp "\\(?1:\\)")
-              ;; right hand side
-              (or "{"
-                  "function"
-                  (seq
-                   (eval lua--function-name-rx) (* blank)
-                   (regexp "\\(?1:\\)") (any "({")))))))
-
-  "Regular expression that matches left-shifter expression.
-
-Left-shifter expression is defined as follows.  If a block
-follows a left-shifter expression, its contents & block-close
-token should be indented relative to left-shifter expression
-indentation rather then to block-open token.
-
-For example:
-   -- 'local a = ' is a left-shifter expression
-   -- 'function' is a block-open token
-   local a = function()
-      -- block contents is indented relative to left-shifter
-      foobarbaz()
-   -- block-end token is unindented to left-shifter indentation
-   end
-
-The following left-shifter expressions are currently handled:
-1. local function definition with function block, begin-end
-2. function call with arguments block, () or {}
-3. assignment/return statement with
-   - table constructor block, {}
-   - function call arguments block, () or {} block
-   - function expression a.k.a. lambda, begin-end block.")
-
-
-(defun lua-point-is-after-left-shifter-p ()
-  "Check if point is right after a left-shifter expression.
-
-See `lua--left-shifter-regexp' for description & example of
-left-shifter expression. "
-  (save-excursion
-    (let ((old-point (point)))
-      (back-to-indentation)
-      (and
-       (/= (point) old-point)
-       (looking-at lua--left-shifter-regexp)
-       (= old-point (match-end 1))))))
-
-
-
 
 (defun lua-calculate-indentation-override (&optional parse-start)
   "Return overriding indentation amount for special cases.
