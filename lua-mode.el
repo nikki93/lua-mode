@@ -1204,11 +1204,8 @@ The criteria for a continuing statement are:
                     ;; check last token of previous nonblank line
                     (lua-last-token-continues-p)))))))
 
-(defun lua-make-indentation-info-pair (found-token found-pos)
-  "Calculate how much current line impacts following line indentation.
-
-This is a helper function to lua-calculate-indentation-info. Don't
-use standalone."
+(defun lua-token-indent-impact (found-token found-pos)
+  "Calculate how much `found-token' impacts following line indentation."
   (let* ((token-info (lua-get-block-token-info found-token))
          (token-type (lua-get-token-type token-info)))
     (cond
@@ -1234,10 +1231,8 @@ use standalone."
      ((eq token-type 'close)
       -1))))
 
-(defun lua-calculate-indentation-info-1 (bound)
-  "Helper function for `lua-calculate-indentation-info'.
-
-Return list of indentation modifiers from point to BOUND."
+(defun lua-line-indent-impact (bound)
+  "Calculate how much current line impacts following line indentation."
   (let ((indentation-info 0))
     (while (lua-find-regexp 'forward lua-indentation-modifier-regexp
                             bound)
@@ -1247,7 +1242,7 @@ Return list of indentation modifiers from point to BOUND."
             (data (match-data)))
         (setq indentation-info
               (+ indentation-info
-                 (* lua-indent-level (lua-make-indentation-info-pair found-token found-pos))))))
+                 (* lua-indent-level (lua-token-indent-impact found-token found-pos))))))
     indentation-info))
 
 (eval-when-compile
@@ -1291,7 +1286,7 @@ to the left by the amount specified in lua-indent-level."
         ;; - indent-level
         (lua-forward-line-skip-blanks 'back)
         (- (+ indentation-modifier
-              (lua-calculate-indentation-info-1 (line-end-position))
+              (lua-line-indent-impact (line-end-position))
               (current-indentation))
            ;; Previous line is a continuing statement, but not current.
            (if (lua-is-continuing-statement-p)
@@ -1314,7 +1309,7 @@ to the left by the amount specified in lua-indent-level."
          ;; The order of function calls here is important.
          ;; call may change the point to another line.
          (+ (current-indentation)
-            (lua-calculate-indentation-info-1 cur-line-begin-pos)
+            (lua-line-indent-impact cur-line-begin-pos)
 
             ;; Previous line is a continuing statement, but not current.
             (if (and (lua-is-continuing-statement-p) (not continuing-p))
