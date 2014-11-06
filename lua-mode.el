@@ -1213,26 +1213,26 @@ use standalone."
          (token-type (lua-get-token-type token-info)))
     (cond
      ((eq token-type 'open)
-      (cons 'relative lua-indent-level))
+      1)
 
      ((eq token-type 'middle-or-open)
-      (if (lua-find-matching-token-word found-token 'backward)
-          ;; This token is in the middle.
-          (cons 'relative 0)
-        (cons 'relative lua-indent-level)))
+      (save-excursion
+        (if (lua-find-matching-token-word found-token 'backward)
+            ;; This token is in the middle.
+            0
+          1)))
 
      ((eq token-type 'middle)
-      ;; Check if opener is on the same line, in which case we do not change
-      ;; indentation.
       (let ((line (line-number-at-pos)))
         (save-excursion
           (when (lua-find-matching-token-word found-token 'backward)
-            (if (= line (line-number-at-pos))
-                (cons 'relative 0))
-            (cons 'relative lua-indent-level)))))
+            (when (/= line (line-number-at-pos))
+              ;; If opener is not on the same line, we change indentation.
+              1))
+          0)))
 
      ((eq token-type 'close)
-      (cons 'relative (- lua-indent-level))))))
+      -1))))
 
 (defun  lua-add-indentation-info-pair (pair info)
   "Add the given indentation info pair to the list of indentation information.
@@ -1261,21 +1261,21 @@ the block is opened."
      ; Just add the pair
      (cons pair info))))
 
-(defun lua-calculate-indentation-info-1 (indentation-info bound)
+(defun lua-calculate-indentation-info-1 (bound)
   "Helper function for `lua-calculate-indentation-info'.
 
 Return list of indentation modifiers from point to BOUND."
-  (while (lua-find-regexp 'forward lua-indentation-modifier-regexp
-                          bound)
-    (let ((found-token (match-string 0))
-          (found-pos (match-beginning 0))
-          (found-end (match-end 0))
-          (data (match-data)))
-      (setq indentation-info
-            (lua-add-indentation-info-pair
-             (lua-make-indentation-info-pair found-token found-pos)
-             indentation-info))))
-  indentation-info)
+  (let ((indentation-info 0))
+    (while (lua-find-regexp 'forward lua-indentation-modifier-regexp
+                            bound)
+      (let ((found-token (match-string 0))
+            (found-pos (match-beginning 0))
+            (found-end (match-end 0))
+            (data (match-data)))
+        (setq indentation-info
+              (+ indentation-info
+                 (* lua-indent-level (lua-make-indentation-info-pair found-token found-pos))))))
+    indentation-info))
 
 (defun lua-calculate-indentation-info (&optional parse-end)
   "For each block token on the line, computes how it affects the indentation.
@@ -1313,9 +1313,7 @@ one."
       ;; First go back to the line that starts it all
       ;; lua-calculate-indentation-info will scan through the whole thing
       (let ((case-fold-search nil))
-        (setq indentation-info
-              (lua-accumulate-indentation-info
-               (lua-calculate-indentation-info parse-end)))))
+        (setq indentation-info (lua-calculate-indentation-info-1 parse-end))))
 
     (if (eq (car indentation-info) 'absolute)
         (- (cdr indentation-info) (current-indentation))
@@ -1337,7 +1335,6 @@ Look for an uninterrupted sequence of block-closing tokens that starts
 at the beginning of the line. For each of these tokens, shift indentation
 to the left by the amount specified in lua-indent-level."
   (let ((indentation-modifier 0)
-        (indentation-info (list (cons 'absolute 0)))
         (case-fold-search nil))
     (save-excursion
       (if parse-start (goto-char parse-start))
@@ -1364,7 +1361,7 @@ to the left by the amount specified in lua-indent-level."
         ;; - indent-level
         (lua-forward-line-skip-blanks 'back)
         (- (+ indentation-modifier
-              (cdr (lua-accumulate-indentation-info (lua-calculate-indentation-info-1 indentation-info (line-end-position))))
+              (lua-calculate-indentation-info-1 (line-end-position))
               (current-indentation))
            ;; Previous line is a continuing statement, but not current.
            (if (lua-is-continuing-statement-p)
@@ -1384,22 +1381,20 @@ to the left by the amount specified in lua-indent-level."
        (lua-calculate-indentation-override)
 
        (when (lua-forward-line-skip-blanks 'back)
-         ;; The order of function calls here is important. Block modifier
+         ;; The order of function calls here is important.
          ;; call may change the point to another line.
-         (let ((modifier
-                 (lua-calculate-indentation-block-modifier cur-line-begin-pos)))
-           (+ (current-indentation)
-              modifier
+         (+ (current-indentation)
+            (lua-calculate-indentation-info-1 cur-line-begin-pos)
 
-              ;; Previous line is a continuing statement, but not current.
-              (if (and (lua-is-continuing-statement-p) (not continuing-p))
-                  (- lua-indent-level)
-                0)
-              
-              ;; Current line is a continuing statement, but not previous.
-              (if (and (not (lua-is-continuing-statement-p)) continuing-p)
-                  lua-indent-level
-                0))))
+            ;; Previous line is a continuing statement, but not current.
+            (if (and (lua-is-continuing-statement-p) (not continuing-p))
+                (- lua-indent-level)
+              0)
+
+            ;; Current line is a continuing statement, but not previous.
+            (if (and (not (lua-is-continuing-statement-p)) continuing-p)
+                lua-indent-level
+              0)))
 
        ;; If there's no previous line, indentation is 0.
        0))))
