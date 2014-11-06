@@ -1270,47 +1270,6 @@ The criteria for a continuing statement are:
           symbol-end)
     "Lua function name regexp in `rx'-SEXP format."))
 
-(defun lua-calculate-indentation-override (&optional parse-start)
-  "Return overriding indentation amount for special cases.
-Look for an uninterrupted sequence of block-closing tokens that starts
-at the beginning of the line. For each of these tokens, shift indentation
-to the left by the amount specified in lua-indent-level."
-  (let ((indentation-modifier 0)
-        (case-fold-search nil))
-    (save-excursion
-      (if parse-start (goto-char parse-start))
-      ;; Look for the last block closing token
-      (back-to-indentation)
-      (when (and (not (lua-comment-or-string-p))
-                 (looking-at lua-indentation-modifier-regexp)
-                 (let ((token-info (lua-get-block-token-info (match-string 0))))
-                   (and token-info
-                        (not (eq 'open (lua-get-token-type token-info))))))
-        ;; Compute indentation changes induced by unmatched closers on current line.
-        (while (lua-find-regexp 'forward lua-indentation-modifier-regexp (line-end-position))
-          (when (and (not (lua-comment-or-string-p))
-                     (looking-at lua-indentation-modifier-regexp)
-                     (let ((token-info (lua-get-block-token-info (match-string 0))))
-                       (and token-info
-                            (not (eq 'open (lua-get-token-type token-info))))))
-            (setq indentation-modifier (- indentation-modifier lua-indent-level))))
-        ;; Current line indentation is:
-        ;; + indentation changes induced by unmatched closers on current line
-        ;; + indentation changes induced by previous line
-        ;; + previous line indentation
-        ;; - indent-level if previous line was a continuation.
-        ;; - indent-level
-        (lua-forward-line-skip-blanks 'back)
-        (- (+ indentation-modifier
-              (lua-line-indent-impact 'current (line-end-position))
-              (current-indentation))
-           ;; Previous line is a continuing statement, but not current.
-           (if (lua-is-continuing-statement-p)
-               lua-indent-level
-             0)
-           lua-indent-level)))))
-
-
 (defun lua-calculate-indentation (&optional parse-start)
   "Return appropriate indentation for current line as Lua code."
   ;; Algorithm: indentation is
@@ -1319,18 +1278,24 @@ to the left by the amount specified in lua-indent-level."
   ;; + one level if previous line is not a continuation and current-line is
   ;; - one level if previous line is a continuation and current-line is not
   ;; - one level on every unmatched closer on current line if it starts with a closer
+  ;; TODO: what about middle statement?
   (save-excursion
-    (let ((continuing-p (lua-is-continuing-statement-p))
-          (cur-line-begin-pos (line-beginning-position)))
-      (or
-       ;; First, check if the line starts with a closer. If so, it should be
-       ;; indented/unindented in special way
-       (lua-calculate-indentation-override)
-
-       (when (lua-forward-line-skip-blanks 'back)
-         ;; The order of function calls here is important.
+    (back-to-indentation)
+    (let* ((continuing-p (lua-is-continuing-statement-p))
+           (cur-line-begin-pos (line-beginning-position))
+           ;; (closer-begin-p
+           ;;  (when (and (not (lua-comment-or-string-p))
+           ;;             (looking-at lua-indentation-modifier-regexp)
+           ;;             (let ((token-info (lua-get-block-token-info (match-string 0))))
+           ;;               (and token-info
+           ;;                    ;; (not (eq 'open (lua-get-token-type token-info))))))
+           ;;                    (eq 'close (lua-get-token-type token-info)))))))
+           (close-factor (lua-line-indent-impact 'current)))
+      
+       (if (lua-forward-line-skip-blanks 'back)
          (+ (current-indentation)
             (lua-line-indent-impact 'next cur-line-begin-pos)
+            close-factor
 
             ;; Previous line is a continuing statement, but not current.
             (if (and (lua-is-continuing-statement-p) (not continuing-p))
@@ -1340,10 +1305,10 @@ to the left by the amount specified in lua-indent-level."
             ;; Current line is a continuing statement, but not previous.
             (if (and (not (lua-is-continuing-statement-p)) continuing-p)
                 lua-indent-level
-              0)))
+              0))
 
-       ;; If there's no previous line, indentation is 0.
-       0))))
+         ;; If there's no previous line, indentation is 0.
+         0))))
 
 (defun lua-beginning-of-proc (&optional arg)
   "Move backward to the beginning of a lua proc (or similar).
