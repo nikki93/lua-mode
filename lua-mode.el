@@ -1234,33 +1234,6 @@ use standalone."
      ((eq token-type 'close)
       -1))))
 
-(defun  lua-add-indentation-info-pair (pair info)
-  "Add the given indentation info pair to the list of indentation information.
-This function has special case handling for two tokens: remove-matching,
-and replace-matching. These two tokens are cleanup tokens that remove or
-alter the effect of a previously recorded indentation info.
-
-When a remove-matching token is encountered, the last recorded info, i.e.
-the car of the list is removed. This is used to roll-back an indentation of a
-block opening statement when it is closed.
-
-When a replace-matching token is seen, the last recorded info is removed,
-and the cdr of the replace-matching info is added in its place. This is used
-when a middle-of the block (the only case is 'else') is seen on the same line
-the block is opened."
-  (cond
-   ( (eq 'remove-matching (car pair))
-     ; Remove head of list
-     (cdr info))
-   ( (eq 'replace-matching (car pair))
-     ; remove head of list, and add the cdr of pair instead
-     (cons (cdr pair) (cdr info)))
-   ( (listp (cdr-safe pair))
-     (nconc pair info))
-   ( t
-     ; Just add the pair
-     (cons pair info))))
-
 (defun lua-calculate-indentation-info-1 (bound)
   "Helper function for `lua-calculate-indentation-info'.
 
@@ -1276,49 +1249,6 @@ Return list of indentation modifiers from point to BOUND."
               (+ indentation-info
                  (* lua-indent-level (lua-make-indentation-info-pair found-token found-pos))))))
     indentation-info))
-
-(defun lua-calculate-indentation-info (&optional parse-end)
-  "For each block token on the line, computes how it affects the indentation.
-The effect of each token can be either a shift relative to the current
-indentation level, or indentation to some absolute column. This information
-is collected in a list of indentation info pairs, which denote absolute
-and relative each, and the shift/column to indent to."
-  (lua-calculate-indentation-info-1
-   (list (cons 'absolute (current-indentation)))
-   (min parse-end (line-end-position))))
-
-(defun lua-accumulate-indentation-info (info)
-  "Accumulates the indentation information previously calculated by
-lua-calculate-indentation-info. Returns either the relative indentation
-shift, or the absolute column to indent to."
-  (let ((info-list (reverse info))
-        (type 'relative)
-        (accu 0))
-    (mapc (lambda (x)
-            (setq accu (if (eq 'absolute (car x))
-                           (progn (setq type 'absolute)
-                                  (cdr x))
-                         (+ accu (cdr x)))))
-          info-list)
-    (cons type accu)))
-
-(defun lua-calculate-indentation-block-modifier (&optional parse-end)
-  "Return amount by which this line modifies the indentation.
-Beginnings of blocks add lua-indent-level once each, and endings
-of blocks subtract lua-indent-level once each. This function is used
-to determine how the indentation of the following line relates to this
-one."
-  (let (indentation-info)
-    (save-excursion
-      ;; First go back to the line that starts it all
-      ;; lua-calculate-indentation-info will scan through the whole thing
-      (let ((case-fold-search nil))
-        (setq indentation-info (lua-calculate-indentation-info-1 parse-end))))
-
-    (if (eq (car indentation-info) 'absolute)
-        (- (cdr indentation-info) (current-indentation))
-      (cdr indentation-info))))
-
 
 (eval-when-compile
   (defconst lua--function-name-rx
