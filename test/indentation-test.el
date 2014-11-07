@@ -438,10 +438,10 @@ foobar(
 (ert-deftest lua-indentation-continuation-with-functioncall ()
   (should-lua-indent "\
 x = foo(123,
-        456)
+   456)
    + bar(
-      qux,
-      quux)"))
+   qux,
+   quux)"))
 
 (ert-deftest lua-indentation-conditional ()
   (should-lua-indent "\
