@@ -552,10 +552,6 @@ end
 
   )
 
-(ert-deftest lua-indentation-alignment ()
-  ;; FIXME: add
-  )
-
 (ert-deftest lua-indentation-tablector ()
   ;; FIXME: add
   )
