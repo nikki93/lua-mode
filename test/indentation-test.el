@@ -380,8 +380,8 @@ foobar(
 
   (should-lua-indent "\
 foobar(a,
-       b,
-       c)")
+   b,
+   c)")
 
   (should-lua-indent "\
 foobar{
@@ -509,7 +509,6 @@ end"))
 
 
 (ert-deftest lua-indentation-block-intro-continuation ()
-  :expected-result :failed
   (should-lua-indent "\
 while
    foo do
