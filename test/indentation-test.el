@@ -286,7 +286,7 @@ a = 0")
   (should-lua-indent "\
 while
    x +
-   y > 0
+      y > 0
 do
    a = a + 1
 end
