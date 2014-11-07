@@ -1105,6 +1105,41 @@ Returns final value of point as integer or nil if operation failed."
                   (lua-comment-or-string-p))
         (throw 'found (point))))))
 
+
+;; TODO: optimizise this by not calling lua-find-matching-token-word, and really
+;; restricting to current line.
+(defun lua-find-matching-token-in-line (found-token found-pos token-type &optional direction)
+  (let ((line (line-number-at-pos))
+        ;; If we are on a middle token, go backwards. If it is a middle-or-open,
+        ;; go forwards.
+        (search-direction
+         (or direction
+             (if (or (eq token-type 'open)
+                     (eq token-type 'middle-or-open))
+                 'forward
+               'backward)
+             'backward)))
+    (save-excursion
+      ;; This is required since lua-find-matching-token-word needs point to be
+      ;; at the beginning of the keyword.
+      (goto-char found-pos)
+      (let ((found-match (lua-find-matching-token-word found-token search-direction)))
+        (when (and found-match (= line (line-number-at-pos)))
+          (point))))))
+
+(defun lua-resolve-token-type (found-token found-pos)
+  "Get resolved token type.
+If token type is 'middle-or-open, determine which one it is and
+return it."
+  (save-excursion
+    (let ((token-type (lua-get-token-type (lua-get-block-token-info found-token))))
+      (if (not (eq token-type 'middle-or-open))
+          token-type
+        (goto-char found-pos)
+        (if (not (lua-find-matching-token-word found-token 'backward))
+            'open
+          'middle)))))
+
 (eval-when-compile
   (defconst lua-operator-class
     "-+*/^.=<>~:"))
@@ -1113,12 +1148,17 @@ Returns final value of point as integer or nil if operation failed."
   (eval-when-compile
     (concat
      "\\(\\_<"
-     (regexp-opt '("and" "or" "not" "in" "for" "while"
-                   "local" "function" "if" "until" "elseif" "return") t)
+     ;; 'until' is a special case since it is a closer, not a middle token. It
+     ;; is one unconsistency of the Lua language.
+     (regexp-opt '("and" "or" "not" "in" "local" "until" "return") t)
+     ;; (regexp-opt '("and" "or" "not" "in" "for" "while"
+     ;;               "local" "function" "if" "until" "elseif" "return") t)
      "\\_>\\|"
      "\\(^\\|[^" lua-operator-class "]\\)"
+     ;; (regexp-opt '("+" "-" "*" "/" "%" "^" ".." "=="
+     ;;               "=" "<" ">" "<=" ">=" "~=" "." ":" ) t)
      (regexp-opt '("+" "-" "*" "/" "%" "^" ".." "=="
-                   "=" "<" ">" "<=" ">=" "~=" "." ":" ) t)
+                   "=" "<" ">" "<=" ">=" "~=" "." ":") t)
      "\\)"
      "\\s *\\="))
   "Regexp that matches the ending of a line that needs continuation
@@ -1146,7 +1186,10 @@ so we're safe to assume that every line that starts with a binop continues
 previous one even though it looked like an end-of-statement.")
 
 (defun lua-last-token-continues-p ()
-  "Returns true if the last token on this line is a continuation token."
+  "Check if this line yields a continuation on next line.
+Return the position of the last token on this line if it is a
+continuation token or, if this line is a continuation, an
+unmatched opener."
   (let ((line-begin (line-beginning-position))
         (line-end (line-end-position)))
     (save-excursion
@@ -1157,7 +1200,19 @@ previous one even though it looked like an end-of-statement.")
         (if (looking-at "--")
             (setq line-end (point))))
       (goto-char line-end)
-      (re-search-backward lua-cont-eol-regexp line-begin t))))
+      (or 
+       (re-search-backward lua-cont-eol-regexp line-begin t)
+       ;; If line has an unmatched opener.
+       (and (lua-is-continuing-statement-p)
+            (progn
+              (back-to-indentation)
+              (let (found-token found-pos result)
+                (while (and (lua-find-regexp 'forward lua-indentation-modifier-regexp (line-end-position))
+                            (not result))
+                  (setq found-token (match-string 0) found-pos (match-beginning 0))
+                  (when (eq 'open (setq token-type (lua-resolve-token-type found-token found-pos)))
+                    (setq result (not (lua-find-matching-token-in-line found-token found-pos token-type)))))
+                (when result found-pos))))))))
 
 (defun lua-first-token-continues-p ()
   "Returns true if the first token on this line is a continuation token."
@@ -1203,40 +1258,6 @@ The criteria for a continuing statement are:
                (and (goto-char prev-line)
                     ;; check last token of previous nonblank line
                     (lua-last-token-continues-p)))))))
-
-;; TODO: optimizise this by not calling lua-find-matching-token-word, and really
-;; restricting to current line.
-(defun lua-find-matching-token-in-line (found-token found-pos token-type &optional direction)
-  (let ((line (line-number-at-pos))
-        ;; If we are on a middle token, go backwards. If it is a middle-or-open,
-        ;; go forwards.
-        (search-direction
-         (or direction
-             (if (or (eq token-type 'open)
-                     (eq token-type 'middle-or-open))
-                 'forward
-               'backward)
-             'backward)))
-    (save-excursion
-      ;; This is required since lua-find-matching-token-word needs point to be
-      ;; at the beginning of the keyword.
-      (goto-char found-pos)
-      (let ((found-match (lua-find-matching-token-word found-token search-direction)))
-        (when (and found-match (= line (line-number-at-pos)))
-          (point))))))
-
-(defun lua-resolve-token-type (found-token found-pos)
-  "Get resolved token type.
-If token type is 'middle-or-open, determine which one it is and
-return it."
-  (save-excursion
-    (let ((token-type (lua-get-token-type (lua-get-block-token-info found-token))))
-      (if (not (eq token-type 'middle-or-open))
-          token-type
-        (goto-char found-pos)
-        (if (not (lua-find-matching-token-word found-token 'backward))
-            'open
-          'middle)))))
 
 (defun lua-line-indent-impact-current (&optional bound)
   "Calculate how much current line impacts indentation of current line.
