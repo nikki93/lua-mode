@@ -391,7 +391,7 @@ foobar{
 
 (ert-deftest lua-indentation-funcall-with-nested-table ()
   :expected-result :failed
-    (should-lua-indent "\
+  (should-lua-indent "\
 foobar({
    a, b, c
 })")
@@ -488,7 +488,7 @@ local function foo (arg1, arg2) bar end
 ")
 
   (should-lua-indent "\
-local function 
+local function
    foo (arg1, arg2) bar end
 ")
 
@@ -524,7 +524,7 @@ local function foo (
 end
 ")
 
-  
+
   (should-lua-indent "\
 local function foo (
       arg1,
@@ -542,7 +542,7 @@ local function foo
 end
 ")
 
-  
+
   (should-lua-indent "\
 local function foo
    ( arg1, arg2 )
@@ -569,7 +569,7 @@ var = 1 + -- comment
    2
 ")
 
-  
+
   (should-lua-indent "\
 var = 1 +
    -- comment
@@ -728,3 +728,41 @@ local b, bt = [[
            g()
          ::b::
 ]]"))
+
+(ert-deftest lua-indentation-engine-rewrite ()
+  ;; This test is a demonstration of the indentation engine rewrite done in
+  ;; November 2014.
+  (should-lua-indent "\
+foobar('arg1', function ()
+      print('foobar')
+end)
+")
+
+  (should-lua-indent "\
+foobar('arg1', function ()
+      print('foobar')
+   end
+)
+")
+
+  (should-lua-indent "\
+foobar('arg1', function ()
+      if foo then print('foobar') end end
+)
+")
+
+  (should-lua-indent "\
+b =
+   {
+}
+")
+
+  (should-lua-indent "\
+foo = bar + baz(
+)
+
+foo = baz(
+)
+")
+
+  )
