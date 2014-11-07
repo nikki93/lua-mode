@@ -557,8 +557,25 @@ end
   )
 
 (ert-deftest lua-indentation-continuation-spans-over-empty-lines ()
-  ;; FIXME: add
-  ;; FIXME: check comment-only lines too
+  (should-lua-indent "\
+var = 1 +
+
+   2
+")
+
+  (should-lua-indent "\
+var = 1 + -- comment
+
+   2
+")
+
+  
+  (should-lua-indent "\
+var = 1 +
+   -- comment
+   2
+")
+
   )
 
 
