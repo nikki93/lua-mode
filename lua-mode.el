@@ -1113,8 +1113,9 @@ Returns final value of point as integer or nil if operation failed."
   (eval-when-compile
     (concat
      "\\(\\_<"
-     (regexp-opt '("and" "or" "not" "in" "for" "while"
-                   "local" "function" "if" "until" "elseif" "return") t)
+     ;; 'until' is a special case since it is a closer followed by a statemen.
+     ;; It is one unconsistency of the Lua language.
+     (regexp-opt '("and" "or" "not" "in" "local" "until" "return") t)
      "\\_>\\|"
      "\\(^\\|[^" lua-operator-class "]\\)"
      (regexp-opt '("+" "-" "*" "/" "%" "^" ".." "=="
