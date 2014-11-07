@@ -1241,10 +1241,6 @@ return it."
 (defun lua-line-indent-impact-current (&optional bound)
   "Calculate how much current line impacts indentation of current line.
 `bound' is set to `line-end-position' by default."
-  ;; Check if first token is a non-opener.
-  ;; If 'middle, unindent once.
-  ;; If 'close, sum all closers and matched-in-line openers.
-  ;;
   ;; TODO: Optimization idea: sum all closers and matched-in-line openers until
   ;; an unmatched-in-line opener is met.
   (unless bound
