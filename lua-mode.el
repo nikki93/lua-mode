@@ -1206,7 +1206,6 @@ The criteria for a continuing statement are:
 
 ;; TODO: optimizise this by not calling lua-find-matching-token-word, and really
 ;; restricting to current line.
-;; TODO: remove direction parameter?
 (defun lua-find-matching-token-in-line (found-token found-pos token-type &optional direction)
   (let ((line (line-number-at-pos))
         ;; If we are on a middle token, go backwards. If it is a middle-or-open,
@@ -1239,62 +1238,76 @@ return it."
             'open
           'middle)))))
 
-(defun lua-line-indent-impact (line &optional bound)
-  "Calculate how much current line impacts indentation of `line' line.
-`line' is either 'current or 'next.
-
+(defun lua-line-indent-impact-current (&optional bound)
+  "Calculate how much current line impacts indentation of current line.
 `bound' is set to `line-end-position' by default."
-  ;; If checking for current line, check if first token is a non-opener.
+  ;; Check if first token is a non-opener.
   ;; If 'middle, unindent once.
   ;; If 'close, sum all closers and matched-in-line openers.
   ;;
-  ;; If checking for next line, ignore all unmatched-in-line closers and sum everything else.
-  ;;
-  ;; TODO: Optimization for current line, sum all closers and matched-in-line
-  ;; openers until an unmatched-in-line opener is met.
-  ;;
-  ;; TODO: review this, write easier code.
+  ;; TODO: Optimization idea: sum all closers and matched-in-line openers until
+  ;; an unmatched-in-line opener is met.
   (unless bound
     (setq bound (line-end-position)))
-  (let ((indentation-info 0)
-        (token-type))
-    (save-excursion
-      (back-to-indentation)
-      (if (and (not (lua-comment-or-string-p))
-               (looking-at lua-indentation-modifier-regexp))
-          (setq token-type (lua-resolve-token-type (match-string 0) (match-beginning 0))))
-      (cond
-       ((and (eq line 'current) (eq token-type 'middle))
-        (setq indentation-info (- lua-indent-level)))
-       ((or (eq line 'next)
-            (and (eq line 'current) (eq token-type 'close)))
-        ;; If checking for next line.
-        (when (and (eq line 'next) (eq token-type 'middle))
-          (setq indentation-info lua-indent-level))
-        ;; Loop over all tokens on line.
-        (back-to-indentation)
-        (while (lua-find-regexp 'forward lua-indentation-modifier-regexp bound)
-          (let ((found-token (match-string 0))
-                (found-pos (match-beginning 0))
-                (found-end (match-end 0))
-                (data (match-data)))
-            (setq token-type (lua-resolve-token-type found-token found-pos))
-            ;; Matched tokens and 'middle are ignored.
-            (unless (or (eq token-type 'middle)
-                        (lua-find-matching-token-in-line found-token found-pos token-type))
-              (message "DEBUG %s: %s,%s" (line-number-at-pos) token-type line)
-              (setq indentation-info
-                    (+ indentation-info
-                       ;; Compute token impact.
-                       (cond
-                        ((and (eq token-type 'open) (eq line 'next)) lua-indent-level)
-                        ;; 'middle' type is both a closer and an opener.
-                        ;; ((and (eq token-type 'middle) (eq line 'next)) 1)
-                        ((eq token-type 'close) (- lua-indent-level))
-                        ;; ((and (eq token-type 'close) (eq line 'current)) (- lua-indent-level))
-                        (t 0))
-                       ))))))))
-    indentation-info))
+  (save-excursion
+    (back-to-indentation)
+    ;; Check first token.
+    (if (or (lua-comment-or-string-p)
+            (not (looking-at lua-indentation-modifier-regexp)))
+        0
+      (let ((token-type (lua-resolve-token-type (match-string 0) (match-beginning 0))))
+        (cond
+         ((eq token-type 'middle)
+          (- lua-indent-level))
+         ((eq token-type 'close)
+          ;; Loop over all tokens on line.
+          (back-to-indentation)
+          (let ((shift 0))
+            (while (lua-find-regexp 'forward lua-indentation-modifier-regexp bound)
+              (let ((found-token (match-string 0))
+                    (found-pos (match-beginning 0))
+                    (found-end (match-end 0))
+                    (data (match-data)))
+                (setq token-type (lua-resolve-token-type found-token found-pos))
+                ;; Only if 'close and unmatched.
+                (when (and (eq token-type 'close)
+                           (not (lua-find-matching-token-in-line found-token found-pos token-type)))
+                  (setq shift (- shift lua-indent-level)))))
+            shift))
+         (t 0))))))
+
+(defun lua-line-indent-impact-next (&optional bound)
+  "Calculate how much current line impacts indentation of next line.
+
+`bound' is set to `line-end-position' by default."
+  (unless bound
+    (setq bound (line-end-position)))
+  (save-excursion
+    ;; Loop over all tokens on line.
+    (back-to-indentation)
+    (let ((shift 0)
+          (token-type))
+      ;; Shift if first token is 'middle.
+      (when (and (not (lua-comment-or-string-p))
+                 (looking-at lua-indentation-modifier-regexp)
+                 (eq 'middle (lua-resolve-token-type (match-string 0) (match-beginning 0))))
+        (setq shift (+ shift lua-indent-level)))
+      ;; Loop over all tokens on line.
+      (while (lua-find-regexp 'forward lua-indentation-modifier-regexp bound)
+        (let ((found-token (match-string 0))
+              (found-pos (match-beginning 0))
+              (found-end (match-end 0))
+              (data (match-data)))
+          (setq token-type (lua-resolve-token-type found-token found-pos))
+          ;; Only if unmatched 'open/'close.
+          (unless (lua-find-matching-token-in-line found-token found-pos token-type)
+            (cond
+             ((eq token-type 'open)
+              (setq shift (+ shift lua-indent-level)))
+             ((eq token-type 'close)
+              (setq shift (- shift lua-indent-level)))
+             (t 0)))))
+      shift)))
 
 (eval-when-compile
   (defconst lua--function-name-rx
@@ -1309,7 +1322,9 @@ return it."
   "Return appropriate indentation for current line as Lua code."
   ;; Algorithm: indentation is
   ;; + previous line indentation
-  ;; + one level on every unmatched opener/middle-token we meet on the previous line
+  ;; + one level on every unmatched opener
+  ;; + one level if first token is a 'middle
+  ;; - one level on every unmatched closer
   ;; + one level if previous line is not a continuation and current-line is
   ;; - one level if previous line is a continuation and current-line is not
   ;; - one level on every unmatched closer on current line if it starts with a closer
@@ -1318,11 +1333,11 @@ return it."
     (back-to-indentation)
     (let* ((continuing-p (lua-is-continuing-statement-p))
            (cur-line-begin-pos (line-beginning-position))
-           (close-factor (lua-line-indent-impact 'current)))
+           (close-factor (lua-line-indent-impact-current)))
 
        (if (lua-forward-line-skip-blanks 'back)
          (+ (current-indentation)
-            (lua-line-indent-impact 'next cur-line-begin-pos)
+            (lua-line-indent-impact-next cur-line-begin-pos)
             close-factor
 
             ;; Previous line is a continuing statement, but not current.
