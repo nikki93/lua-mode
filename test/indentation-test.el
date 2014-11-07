@@ -72,11 +72,11 @@ bar = 20"))
   (should-lua-indent "\
 a =
    {
-   }
+}
 
 b =
    {
-   },
+},
 
 
 a = {
@@ -92,23 +92,23 @@ this_should_be_unindented()
 -- here foobar should be indented as simple continuation statement
 a = a +
    dosmth(
-   ) +
+) +
    foobar
 
 a =
    do_smth(
-      do_smth_arg
-   )
+   do_smth_arg
+)
 
 b =
    {
-      table_elt0_indented,
-      table_elt1_indented
-   }
+   table_elt0_indented,
+   table_elt1_indented
+}
 
 this_should_be_unindented_too =
    {
-   }
+}
 
 this_should_be_unindented_three = etc"))
 
