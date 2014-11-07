@@ -483,8 +483,73 @@ if foo then a = a + 1 else
 end"))
 
 (ert-deftest lua-indentation-defun ()
-  ;; 	 [local] function funcname funcbody
-  ;; FIXME: add
+  (should-lua-indent "\
+local function foo (arg1, arg2) bar end
+")
+
+  (should-lua-indent "\
+local function 
+   foo (arg1, arg2) bar end
+")
+
+  (should-lua-indent "\
+local
+function foo (arg1, arg2) bar end
+")
+
+  (should-lua-indent "\
+local
+   function foo (arg1, arg2) bar
+end
+")
+
+  (should-lua-indent "\
+local function foo (arg1, arg2)
+   bar
+end
+")
+
+  (should-lua-indent "\
+local function foo (arg1,
+      arg2)
+   bar
+end
+")
+
+  (should-lua-indent "\
+local function foo (
+      arg1,
+      arg2)
+   bar
+end
+")
+
+  
+  (should-lua-indent "\
+local function foo (
+      arg1,
+      arg2
+   )
+   bar
+end
+")
+
+  (should-lua-indent "\
+local function foo
+   ( arg1, arg2
+   )
+   bar
+end
+")
+
+  
+  (should-lua-indent "\
+local function foo
+   ( arg1, arg2 )
+   bar
+end
+")
+
   )
 
 (ert-deftest lua-indentation-alignment ()
@@ -627,7 +692,7 @@ end")
 
   (should-lua-indent "\
 -- 5.2.0-beta-rc2
-::redo:: 
+::redo::
 for x=1,10 do
    for y=1,10 do
       if not f(x,y) then goto continue end
