@@ -189,18 +189,18 @@ x = {
 (ert-deftest lua-indentation-return-continuation ()
   (should-lua-indent "\
 return
-   123")
+123")
 
   (should-lua-indent "\
 do
    return
-      123
+   123
 end")
 
   (should-lua-indent "\
 do
    return
-      x +
+   x +
       y
 end")
 
@@ -271,7 +271,7 @@ a = 0")
 
   (should-lua-indent "\
 while
-   foo
+foo
 do
    a = a + 1
 end
@@ -284,9 +284,8 @@ while foo do a = a + 1 end
 a = 0")
 
   (should-lua-indent "\
-while
-   x +
-      y > 0
+while x +
+   y > 0
 do
    a = a + 1
 end
@@ -494,7 +493,7 @@ local function
 
   (should-lua-indent "\
 local
-function foo (arg1, arg2) bar end
+   function foo (arg1, arg2) bar end
 ")
 
   (should-lua-indent "\
@@ -589,21 +588,15 @@ end"))
 (ert-deftest lua-indentation-block-intro-continuation ()
   (should-lua-indent "\
 while
-   foo do
+foo do
    a = a + 1
 end
 
 a = 0")
 
   (should-lua-indent "\
-for k, v
-   in pairs(bar) do a = a + 1 end
-
-a = 0")
-
-  (should-lua-indent "\
-for k, v
-   in pairs(bar) do a = a + 1 end
+for k, v in
+   pairs(bar) do a = a + 1 end
 
 a = 0")
 

@@ -936,18 +936,22 @@ ignored, nil otherwise."
      (regexp-opt '("{" "(" "[" "]" ")" "}") t))))
 
 (defconst lua-block-token-alist
-  '(("do"       "\\_<end\\_>"   "\\_<for\\|while\\_>"                     middle-or-open)
+  ;; TODO: clean this.
+  ;; '(("do"       "\\_<end\\_>"   "\\_<for\\|while\\_>"                     middle-or-open)
+  '(("do"       "\\_<end\\_>"   nil                                       open)
     ("function" "\\_<end\\_>"   nil                                       open)
     ("repeat"   "\\_<until\\_>" nil                                       open)
-    ("then"     "\\_<\\(else\\|elseif\\|end\\)\\_>" "\\_<\\(elseif\\|if\\)\\_>" middle)
+    ;; ("then"     "\\_<\\(else\\|elseif\\|end\\)\\_>" "\\_<\\(elseif\\|if\\)\\_>" middle)
+    ("then"     "\\_<\\(else\\|elseif\\|end\\)\\_>" nil                 open)
     ("{"        "}"           nil                                       open)
     ("["        "]"           nil                                       open)
     ("("        ")"           nil                                       open)
-    ("if"       "\\_<then\\_>"  nil                                       open)
-    ("for"      "\\_<do\\_>"    nil                                       open)
-    ("while"    "\\_<do\\_>"    nil                                       open)
+    ;; ("if"       "\\_<then\\_>"  nil                                       open)
+    ;; ("for"      "\\_<do\\_>"    nil                                       open)
+    ;; ("while"    "\\_<do\\_>"    nil                                       open)
     ("else"     "\\_<end\\_>"   "\\_<then\\_>"                              middle)
-    ("elseif"   "\\_<then\\_>"  "\\_<then\\_>"                              middle)
+    ;; ("elseif"   "\\_<then\\_>"  "\\_<then\\_>"                              middle)
+    ("elseif"   nil           "\\_<then\\_>"                              close)
     ("end"      nil           "\\_<\\(do\\|function\\|then\\|else\\)\\_>" close)
     ("until"    nil           "\\_<repeat\\_>"                            close)
     ("}"        nil           "{"                                       close)
@@ -964,7 +968,8 @@ TOKEN-TYPE determines where the token occurs on a statement. open indicates that
 (defconst lua-indentation-modifier-regexp
   (concat
    "\\(\\_<"
-   (regexp-opt '("do" "function" "repeat" "then" "if" "else" "elseif" "for" "while") t)
+   ;; (regexp-opt '("do" "function" "repeat" "then" "if" "else" "elseif" "for" "while") t)
+   (regexp-opt '("do" "function" "repeat" "then" "else" "elseif") t)
    "\\_>\\|"
    (regexp-opt '("{" "(" "["))
    "\\)\\|\\(\\_<"
@@ -1115,7 +1120,8 @@ Returns final value of point as integer or nil if operation failed."
      "\\(\\_<"
      ;; 'until' is a special case since it is a closer followed by a statemen.
      ;; It is one unconsistency of the Lua language.
-     (regexp-opt '("and" "or" "not" "in" "local" "until" "return") t)
+     ;; (regexp-opt '("and" "or" "not" "in" "local" "until" "return") t)
+     (regexp-opt '("and" "or" "not" "in" "local" "until") t)
      "\\_>\\|"
      "\\(^\\|[^" lua-operator-class "]\\)"
      (regexp-opt '("+" "-" "*" "/" "%" "^" ".." "=="
@@ -1170,20 +1176,21 @@ previous one even though it looked like an end-of-statement.")
       ;; the control inside this function
       (re-search-forward lua-cont-bol-regexp line-end t))))
 
-(defconst lua-block-starter-regexp
-  (eval-when-compile
-    (concat
-     "\\(\\_<"
-     (regexp-opt '("do" "while" "repeat" "until" "if" "then"
-                   "else" "elseif" "end" "for" "local") t)
-     "\\_>\\)")))
+;; TODO: remove this.
+;; (defconst lua-block-starter-regexp
+;;   (eval-when-compile
+;;     (concat
+;;      "\\(\\_<"
+;;      (regexp-opt '("do" "while" "repeat" "until" "if" "then"
+;;                    "else" "elseif" "end" "for" "local") t)
+;;      "\\_>\\)")))
 
-(defun lua-first-token-starts-block-p ()
-  "Returns true if the first token on this line is a block starter token."
-  (let ((line-end (line-end-position)))
-    (save-excursion
-      (beginning-of-line)
-      (re-search-forward (concat "\\s *" lua-block-starter-regexp) line-end t))))
+;; (defun lua-first-token-starts-block-p ()
+;;   "Returns true if the first token on this line is a block starter token."
+;;   (let ((line-end (line-end-position)))
+;;     (save-excursion
+;;       (beginning-of-line)
+;;       (re-search-forward (concat "\\s *" lua-block-starter-regexp) line-end t))))
 
 (defun lua-is-continuing-statement-p (&optional parse-start)
   "Return non-nil if the line continues a statement.
@@ -1199,7 +1206,7 @@ The criteria for a continuing statement are:
       (if parse-start (goto-char parse-start))
       (save-excursion (setq prev-line (lua-forward-line-skip-blanks 'back)))
       (and prev-line
-           (not (lua-first-token-starts-block-p))
+           ;; (not (lua-first-token-starts-block-p))
            (or (lua-first-token-continues-p)
                (and (goto-char prev-line)
                     ;; check last token of previous nonblank line
@@ -1226,6 +1233,7 @@ The criteria for a continuing statement are:
         (when (and found-match (= line (line-number-at-pos)))
           (point))))))
 
+;; TODO: purge middle-or-open code.
 (defun lua-resolve-token-type (found-token found-pos)
   "Get resolved token type.
 If token type is 'middle-or-open, determine which one it is and
