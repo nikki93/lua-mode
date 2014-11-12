@@ -1111,10 +1111,9 @@ Returns final value of point as integer or nil if operation failed."
   (eval-when-compile
     (concat
      "\\(\\_<"
-     ;; 'until' is a special case since it is a closer followed by a statemen.
+     ;; 'until' is a special case since it is a closer followed by a statement.
      ;; It is one unconsistency of the Lua language.
-     ;; (regexp-opt '("and" "or" "not" "in" "local" "until" "return") t)
-     (regexp-opt '("and" "or" "not" "in" "local" "until") t)
+     (regexp-opt '("and" "or" "not" "in" "local" "until" "if" "for" "while") t)
      "\\_>\\|"
      "\\(^\\|[^" lua-operator-class "]\\)"
      (regexp-opt '("+" "-" "*" "/" "%" "^" ".." "=="

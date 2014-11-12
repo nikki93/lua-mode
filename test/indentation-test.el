@@ -271,7 +271,7 @@ a = 0")
 
   (should-lua-indent "\
 while
-foo
+   foo
 do
    a = a + 1
 end
@@ -588,7 +588,7 @@ end"))
 (ert-deftest lua-indentation-block-intro-continuation ()
   (should-lua-indent "\
 while
-foo do
+   foo do
    a = a + 1
 end
 
