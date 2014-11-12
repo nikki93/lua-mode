@@ -936,21 +936,14 @@ ignored, nil otherwise."
      (regexp-opt '("{" "(" "[" "]" ")" "}") t))))
 
 (defconst lua-block-token-alist
-  ;; TODO: clean this.
-  ;; '(("do"       "\\_<end\\_>"   "\\_<for\\|while\\_>"                     middle-or-open)
   '(("do"       "\\_<end\\_>"   nil                                       open)
     ("function" "\\_<end\\_>"   nil                                       open)
     ("repeat"   "\\_<until\\_>" nil                                       open)
-    ;; ("then"     "\\_<\\(else\\|elseif\\|end\\)\\_>" "\\_<\\(elseif\\|if\\)\\_>" middle)
     ("then"     "\\_<\\(else\\|elseif\\|end\\)\\_>" nil                 open)
     ("{"        "}"           nil                                       open)
     ("["        "]"           nil                                       open)
     ("("        ")"           nil                                       open)
-    ;; ("if"       "\\_<then\\_>"  nil                                       open)
-    ;; ("for"      "\\_<do\\_>"    nil                                       open)
-    ;; ("while"    "\\_<do\\_>"    nil                                       open)
     ("else"     "\\_<end\\_>"   "\\_<then\\_>"                              middle)
-    ;; ("elseif"   "\\_<then\\_>"  "\\_<then\\_>"                              middle)
     ("elseif"   nil           "\\_<then\\_>"                              close)
     ("end"      nil           "\\_<\\(do\\|function\\|then\\|else\\)\\_>" close)
     ("until"    nil           "\\_<repeat\\_>"                            close)
@@ -1176,22 +1169,6 @@ previous one even though it looked like an end-of-statement.")
       ;; the control inside this function
       (re-search-forward lua-cont-bol-regexp line-end t))))
 
-;; TODO: remove this.
-;; (defconst lua-block-starter-regexp
-;;   (eval-when-compile
-;;     (concat
-;;      "\\(\\_<"
-;;      (regexp-opt '("do" "while" "repeat" "until" "if" "then"
-;;                    "else" "elseif" "end" "for" "local") t)
-;;      "\\_>\\)")))
-
-;; (defun lua-first-token-starts-block-p ()
-;;   "Returns true if the first token on this line is a block starter token."
-;;   (let ((line-end (line-end-position)))
-;;     (save-excursion
-;;       (beginning-of-line)
-;;       (re-search-forward (concat "\\s *" lua-block-starter-regexp) line-end t))))
-
 (defun lua-is-continuing-statement-p (&optional parse-start)
   "Return non-nil if the line continues a statement.
 More specifically, return the point in the line that is continued.
@@ -1233,20 +1210,6 @@ The criteria for a continuing statement are:
         (when (and found-match (= line (line-number-at-pos)))
           (point))))))
 
-;; TODO: purge middle-or-open code.
-(defun lua-resolve-token-type (found-token found-pos)
-  "Get resolved token type.
-If token type is 'middle-or-open, determine which one it is and
-return it."
-  (save-excursion
-    (let ((token-type (lua-get-token-type (lua-get-block-token-info found-token))))
-      (if (not (eq token-type 'middle-or-open))
-          token-type
-        (goto-char found-pos)
-        (if (not (lua-find-matching-token-word found-token 'backward))
-            'open
-          'middle)))))
-
 (defun lua-line-indent-impact-current (&optional bound)
   "Calculate how much current line impacts indentation of current line.
 `bound' is set to `line-end-position' by default."
@@ -1260,7 +1223,7 @@ return it."
     (if (or (lua-comment-or-string-p)
             (not (looking-at lua-indentation-modifier-regexp)))
         0
-      (let ((token-type (lua-resolve-token-type (match-string 0) (match-beginning 0))))
+      (let ((token-type (lua-get-token-type (lua-get-block-token-info (match-string 0)))))
         (cond
          ((eq token-type 'middle)
           (- lua-indent-level))
@@ -1271,7 +1234,7 @@ return it."
             (while (lua-find-regexp 'forward lua-indentation-modifier-regexp bound)
               (let ((found-token (match-string 0))
                     (found-pos (match-beginning 0)))
-                (setq token-type (lua-resolve-token-type found-token found-pos))
+                (setq token-type (lua-get-token-type (lua-get-block-token-info found-token)))
                 ;; Only if 'close and unmatched.
                 (when (and (eq token-type 'close)
                            (not (lua-find-matching-token-in-line found-token found-pos token-type)))
@@ -1293,13 +1256,13 @@ return it."
       ;; Shift if first token is 'middle.
       (when (and (not (lua-comment-or-string-p))
                  (looking-at lua-indentation-modifier-regexp)
-                 (eq 'middle (setq first-token-type (lua-resolve-token-type (match-string 0) (match-beginning 0)))))
+                 (eq 'middle (setq first-token-type (lua-get-token-type (lua-get-block-token-info (match-string 0))))))
         (setq shift (+ shift lua-indent-level)))
       ;; Loop over all tokens in line.
       (while (lua-find-regexp 'forward lua-indentation-modifier-regexp bound)
         (let ((found-token (match-string 0))
               (found-pos (match-beginning 0)))
-          (setq token-type (lua-resolve-token-type found-token found-pos))
+          (setq token-type (lua-get-token-type (lua-get-block-token-info found-token)))
           ;; Only if unmatched 'open and unmatched 'close if first token was not
           ;; 'close.
           (unless (lua-find-matching-token-in-line found-token found-pos token-type)
