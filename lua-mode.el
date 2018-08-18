@@ -1267,7 +1267,7 @@ return it."
                 ;; Only if 'close and unmatched.
                 (when (and (eq token-type 'close)
                            (not (lua-find-matching-token-in-line found-token found-pos token-type)))
-                  (setq shift (- shift lua-indent-level)))))
+                  (setq shift (- lua-indent-level)))))
             shift))
          (t 0))))))
 
@@ -1297,9 +1297,11 @@ return it."
           (unless (lua-find-matching-token-in-line found-token found-pos token-type)
             (cond
              ((eq token-type 'open)
-              (setq shift (+ shift lua-indent-level)))
+              (setq shift lua-indent-level))
+             ((eq token-type 'middle)
+              (setq shift lua-indent-level))
              ((and (eq token-type 'close) (not (eq first-token-type 'close)))
-              (setq shift (- shift lua-indent-level)))
+              (setq shift (- lua-indent-level)))
              (t 0)))))
       shift)))
 
@@ -1334,23 +1336,23 @@ return it."
            (cur-line-begin-pos (line-beginning-position))
            (close-factor (lua-line-indent-impact-current)))
 
-       (if (lua-forward-line-skip-blanks 'back)
-         (+ (current-indentation)
-            (lua-line-indent-impact-next cur-line-begin-pos)
-            close-factor
+      (if (lua-forward-line-skip-blanks 'back)
+          (+ (current-indentation)
+             (lua-line-indent-impact-next cur-line-begin-pos)
+             close-factor
 
-            ;; Previous line is a continuing statement, but not current.
-            (if (and (lua-is-continuing-statement-p) (not continuing-p))
-                (- lua-indent-level)
-              0)
+             ;; Previous line is a continuing statement, but not current.
+             (if (and (lua-is-continuing-statement-p) (not continuing-p))
+                 (- lua-indent-level)
+               0)
 
-            ;; Current line is a continuing statement, but not previous.
-            (if (and (not (lua-is-continuing-statement-p)) continuing-p)
-                lua-indent-level
-              0))
+             ;; Current line is a continuing statement, but not previous.
+             (if (and (not (lua-is-continuing-statement-p)) continuing-p)
+                 lua-indent-level
+               0))
 
-         ;; If there's no previous line, indentation is 0.
-         0))))
+        ;; If there's no previous line, indentation is 0.
+        0))))
 
 (defun lua-beginning-of-proc (&optional arg)
   "Move backward to the beginning of a lua proc (or similar).
